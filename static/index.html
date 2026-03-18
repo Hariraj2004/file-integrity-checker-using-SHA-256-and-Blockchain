@@ -458,8 +458,19 @@ async function api(path, opts = {}) {
     showLoginOverlay();
     throw new Error("Unauthorized");
   }
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || res.statusText); }
-  return res.json();
+  
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    console.error("Failed to parse JSON for", path, err);
+    throw new Error("Invalid response from server - check Vercel logs or SSO setup.");
+  }
+  
+  if (!res.ok) { 
+    throw new Error(data.error || res.statusText); 
+  }
+  return data;
 }
 
 function fmtSize(b) {
@@ -735,10 +746,25 @@ async function logout() {
 async function checkAuth() {
   try {
     const res = await fetch(API + '/api/auth/status', { credentials: 'include' });
-    const data = await res.json();
+    if (!res.ok && res.status !== 401) {
+       // e.g. 500 or Vercel SSO 401 interception might return HTML
+       console.error("Auth status returned", res.status);
+    }
+    const txt = await res.text();
+    let data;
+    try {
+      data = JSON.parse(txt);
+    } catch {
+      console.warn("Auth status returned non-JSON. Server error or SSO wall?", txt.substring(0, 100));
+      showLoginOverlay();
+      return false;
+    }
+    
     if (!data.logged_in) showLoginOverlay();
-    return data.logged_in;
-  } catch {
+    return !!data.logged_in;
+  } catch (err) {
+    console.error("checkAuth error:", err);
+    showLoginOverlay();
     return false;
   }
 }
