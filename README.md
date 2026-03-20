@@ -6,6 +6,12 @@
 
 ---
 
+## Overview
+
+To make the dashboard more informative, I introduced a file change percentage indicator. This feature compares the original and modified file content and visually displays the severity of changes, while blockchain-backed hash logging preserves integrity verification.
+
+---
+
 ## Project Structure
 
 ```

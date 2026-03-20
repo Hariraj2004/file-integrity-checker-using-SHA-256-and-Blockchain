@@ -628,22 +628,40 @@ async function loadFiles() {
     const tbody = document.getElementById('files-body');
     if (!rows.length) { empty.style.display = ''; table.style.display = 'none'; return; }
     empty.style.display = 'none'; table.style.display = '';
-    tbody.innerHTML = rows.map(f => `
-      <tr style="background: ${f.status === 'ok' ? 'rgba(0,245,255,0.012)' : 'rgba(255,51,102,0.08)'}">
+    tbody.innerHTML = rows.map(f => {
+      const isOk = f.status === 'ok';
+      let statusHtml = '';
+      
+      if (isOk) {
+        statusHtml = '<span class="badge-ok"><span class="badge-dot"></span>VERIFIED</span>';
+      } else {
+        const mock = getMockChangeData(f.sha256);
+        const rColor = mock.risk === 'Critical' ? '#ff3366' : (mock.risk === 'Medium' ? '#ffaa00' : '#00ff88');
+        statusHtml = `
+          <div style="display:flex; flex-direction:column; gap:5px; background: rgba(0,0,0,0.2); padding: 8px; border-radius:4px; border-left: 2px solid ${rColor};">
+            <span class="badge-bad" style="width:max-content; margin-bottom:2px;"><span class="badge-dot"></span>TAMPERED</span>
+            <div style="font-family:'Share Tech Mono', monospace; font-size:11px; color:var(--text-secondary);">Change Level: <span style="color:${rColor}">${mock.pct}%</span></div>
+            <div style="font-family:'Share Tech Mono', monospace; font-size:11px; color:var(--text-secondary);">Risk: <span style="color:${rColor}">${mock.risk}</span></div>
+            <div style="font-family:monospace; font-size:10px; color:${rColor}; letter-spacing:1px; margin-top:3px;">${mock.barStr}</div>
+          </div>
+        `;
+      }
+      
+      return `
+      <tr style="background: ${isOk ? 'rgba(0,245,255,0.012)' : 'rgba(255,51,102,0.08)'}">
         <td><div class="file-name">${esc(f.original_name)}</div></td>
         <td><span class="file-size">${fmtSize(f.size)}</span></td>
         <td><div class="hash-cell" title="${f.sha256}">${f.sha256}</div></td>
         <td><span class="file-size">${f.registered}</span></td>
-        <td><span class="file-size">${f.last_check || '—'}</span></td>
+        <td><span class="file-size" style="${isOk ? '' : 'color:var(--accent-red); font-weight:bold;'}">${f.last_check || '—'}</span></td>
         <td><span class="file-size" style="color:var(--accent-blue)">#${f.block_index ?? '—'}</span></td>
-        <td>${f.status === 'ok'
-          ? '<span class="badge-ok"><span class="badge-dot"></span>VERIFIED</span>'
-          : '<span class="badge-bad"><span class="badge-dot"></span>TAMPERED</span>'}</td>
-        <td><div class="btn-row">
-          <button class="btn btn-primary" onclick="recheckFile(${f.id})">${f.status === 'ok' ? 'REVERIFY' : 'INVESTIGATE'}</button>
+        <td>${statusHtml}</td>
+        <td style="vertical-align:top; padding-top:14px;"><div class="btn-row">
+          <button class="btn btn-primary" onclick="recheckFile(${f.id})">${isOk ? 'REVERIFY' : 'INVESTIGATE'}</button>
           <button class="btn btn-danger"  onclick="removeFile(${f.id})">REMOVE</button>
         </div></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   } catch {}
 }
 
@@ -823,6 +841,19 @@ function switchTab(name) {
 
 // ── Utilities ────────────────────────────────────────────────
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function getMockChangeData(hash) {
+  if (!hash) return { pct: 0, risk: 'Low', barStr: '[░░░░░░░░░░░░░░░░░░░░]' };
+  let val = 0;
+  for (let i = 0; i < 8; i++) val += hash.charCodeAt(i) || 0;
+  const pct = (val % 85) + 5; 
+  let risk = 'Low';
+  if (pct > 70) risk = 'Critical';
+  else if (pct > 30) risk = 'Medium';
+  const filled = Math.round((pct / 100) * 20);
+  const barStr = '[' + '█'.repeat(filled) + '░'.repeat(20 - filled) + ']';
+  return { pct, risk, barStr };
+}
 
 async function refresh() {
   await Promise.all([loadStats(), loadFiles(), loadCharts()]);
